@@ -1,48 +1,63 @@
-import pickle
+import streamlit as st
+import sqlite3
 
-def save_tasks(tasks):
-    with open('tasks.pickle', 'wb') as f:
-        pickle.dump(tasks, f)
+def create_task_table(connection):
+    cursor = connection.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY,
+            task_name TEXT,
+            completed INTEGER
+        )
+    ''')
+    connection.commit()
 
-def load_tasks():
-    try:
-        with open('tasks.pickle', 'rb') as f:
-            tasks = pickle.load(f)
-    except FileNotFoundError:
-        tasks = []
+def save_task(connection, task_name):
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO tasks (task_name, completed) VALUES (?, ?)", (task_name, 0))
+    connection.commit()
+
+def load_tasks(connection):
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM tasks")
+    tasks = cursor.fetchall()
     return tasks
 
+def update_task_completion(connection, task_id, completed):
+    cursor = connection.cursor()
+    cursor.execute("UPDATE tasks SET completed = ? WHERE id = ?", (completed, task_id))
+    connection.commit()
+
 def main():
-    tasks = load_tasks()
+    st.title("To-Do List App")
+    connection = sqlite3.connect('tasks.db')
+    create_task_table(connection)
 
-    while True:
-        print("1. Add Task")
-        print("2. View Tasks")
-        print("3. Mark as Complete")
-        print("4. Delete Task")
-        print("5. Save and Exit")
+    action = st.selectbox("Select an action:", ["View Tasks", "Add Task"])
 
-        choice = input("Enter your choice: ")
-
-        if choice == '1':
-            task_name = input("Enter task: ")
-            tasks.append({'task_name': task_name, 'completed': False})
-        elif choice == '2':
-            for i, task in enumerate(tasks):
-                status = "Completed" if task['completed'] else "Not Completed"
-                print(f"{i+1}. {task['task_name']} - {status}")
-        elif choice == '3':
-            index = int(input("Enter task index to mark as complete: "))
-            tasks[index - 1]['completed'] = True
-        elif choice == '4':
-            index = int(input("Enter task index to delete: "))
-            del tasks[index - 1]
-        elif choice == '5':
-            save_tasks(tasks)
-            print("Tasks saved. Exiting.")
-            break
+    if action == "View Tasks":
+        st.header("View Tasks")
+        tasks = load_tasks(connection)
+        if not tasks:
+            st.write("No tasks available.")
         else:
-            print("Invalid choice. Please choose again.")
+            for task_id, task_name, completed in tasks:
+                task_name_display = f"~~{task_name}~~" if completed else task_name
+                completed_checkbox = st.checkbox("", value=completed, key=f"checkbox_{task_id}")
+                st.write(f"{task_name_display}")
+                if completed_checkbox != completed:
+                    update_task_completion(connection, task_id, 1 if completed_checkbox else 0)
+                    st.success("Task status updated successfully.")
+
+    elif action == "Add Task":
+        st.header("Add Task")
+        task_name = st.text_input("Enter task:")
+        if st.button("Add"):
+            if task_name:
+                save_task(connection, task_name)
+                st.success("Task added successfully!")
+
+    connection.close()
 
 if __name__ == "__main__":
     main()
