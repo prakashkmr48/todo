@@ -1,2 +1,1 @@
 streamlit==0.89.0
-sqlite3==2.6.0  # Note: sqlite3 is part of the Python standard library and doesn't need to be listed here
